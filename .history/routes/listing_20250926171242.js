@@ -1,0 +1,105 @@
+const express = require("express");
+const router = express.Router();
+const wrapAsync = require("../utils/wrapAsync.js");
+const ExpressError = require("../utils/ExpressError.js");
+const {listingSchema } = require("../schema.js");  
+const Listing = require("../models/listing.js");
+
+
+const validateListing =(req,res,next) =>{
+  let {error} =listingSchema.validate(req.body);
+if(error){
+  let errMsg = error.details.map((el) => el.message).join(",");
+  throw new ExpressError(400, errMsg);
+} else{
+  next(); 
+}
+};
+
+
+router.get("/", wrapAsync(async (req,res) =>{
+  const allListings = await Listing.find({});
+   console.log(allListings);
+  res.render("listings/index",{ allListings });
+}));
+
+router.get("/new",(req,res) =>{
+  res.render("listings/new");
+});
+
+router.get("/:id" ,wrapAsync(async (req,res) =>{
+  let {id} = req.params;
+  const listing = await Listing.findById(id).populate("reviews");
+  res.render("listings/show", {listing});
+}));
+
+
+router.post("/" ,
+  validateListing,
+  wrapAsync(async(req,res,next) =>{
+  // let{title,description, image, }
+
+  const newListing = new Listing(req.body.listing);
+  await newListing.save();
+  res.redirect("/listings");
+  }
+
+)
+);
+
+router.get("/:id/edit" ,wrapAsync(async(req,res) =>{
+  let {id} = req.params;
+  const  listing = await Listing.findById(id);
+  // res.render("listings/edit",{listing});
+  res.render("listings/edit", { 
+  listing: { ...listing.toObject(), image: listing.image.url || "" } 
+});
+
+}));
+
+
+// router.put("/:id" ,
+//    validateListing,
+//   wrapAsync(async(req,res) =>{
+//   let {id} = req.params;
+//   await Listing.findByIdAndUpdate(id, {...req.body.listing});
+  
+//  res.redirect(`/listings/${id}`);
+// }));
+router.put("/:id",
+  validateListing,
+  wrapAsync(async (req, res) => {
+    const { id } = req.params;
+    const listing = await Listing.findById(id);
+
+    if (!listing) {
+      throw new ExpressError(404, "Listing not found");
+    }
+
+    // Update text fields
+    listing.title = req.body.listing.title;
+    listing.description = req.body.listing.description;
+    listing.price = req.body.listing.price;
+    listing.location = req.body.listing.location;
+    listing.country = req.body.listing.country;
+
+    // Only update image if a new one is provided
+    if (req.body.listing.image?.url) {
+      listing.image = req.body.listing.image;
+    }
+
+    await listing.save();
+    res.redirect(`/listings/${id}`);
+  })
+);
+
+
+router.delete("/:id" ,wrapAsync(async(req,res) =>{
+  
+  
+  let {id} = req.params;
+  let deletedListing = await Listing.findByIdAndDelete(id);
+  res.redirect("/listings");
+}));
+
+module.exports = router;
