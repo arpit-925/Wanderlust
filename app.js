@@ -172,7 +172,10 @@ app.get("/api/health", (req, res) => {
 });
 
 // ---------- 404 & error handling ----------
-app.all("/*", (req, res, next) => {
+// app.all("/*", (req, res, next) => {
+//   next(new ExpressError(404, "Page not found!"));
+// });
+app.use((req, res, next) => {
   next(new ExpressError(404, "Page not found!"));
 });
 
