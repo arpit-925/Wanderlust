@@ -66,23 +66,33 @@ app.engine("ejs", ejsMate);
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
 
+// Ensure templates always see a defined currentUser (prevents ReferenceError in EJS)
+app.locals.currentUser = null;
+
 // ---------- Security & Logging Middlewares ----------
 app.use(helmet());
 
-// Simple CORS whitelist support (set CORS_WHITELIST env as comma-separated origins)
+// CORS setup (safe whitelist + allow no-origin requests)
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || "http://localhost:3000";
+// Example env: CORS_WHITELIST=https://stayhub-on26.onrender.com,http://localhost:3000
 const CORS_WHITELIST = (process.env.CORS_WHITELIST || CLIENT_ORIGIN)
   .split(",")
-  .map((s) => s.trim());
+  .map((s) => s.trim())
+  .filter(Boolean);
 
 app.use(
   cors({
     origin: function (origin, callback) {
-      // allow non-browser tools (Postman, mobile) with no origin
+      // allow requests with no origin (curl, Postman, server-to-server, native apps)
       if (!origin) return callback(null, true);
-      if (CORS_WHITELIST.indexOf(origin) !== -1) {
+
+      // allow if origin is in whitelist
+      if (CORS_WHITELIST.includes(origin)) {
         return callback(null, true);
       }
+
+      // log rejected origin so you can add it to whitelist if it's legitimate
+      console.warn("Blocked CORS request from origin:", origin);
       return callback(new Error("CORS policy: This origin is not allowed"));
     },
     credentials: true,
@@ -141,10 +151,11 @@ passport.serializeUser(User.serializeUser());
 passport.deserializeUser(User.deserializeUser());
 
 // ---------- Flash & locals ----------
+// Ensure res.locals.currentUser is defined for every request
 app.use((req, res, next) => {
-  res.locals.success = req.flash("success");
-  res.locals.error = req.flash("error");
-  res.locals.currentUser = req.user;
+  res.locals.success = req.flash ? req.flash("success") : [];
+  res.locals.error = req.flash ? req.flash("error") : [];
+  res.locals.currentUser = req.user || null;
   next();
 });
 
@@ -172,39 +183,29 @@ app.get("/api/health", (req, res) => {
 });
 
 // ---------- 404 & error handling ----------
-// app.all("/*", (req, res, next) => {
-//   next(new ExpressError(404, "Page not found!"));
-// });
 app.use((req, res, next) => {
   next(new ExpressError(404, "Page not found!"));
 });
 
-// app.use((err, req, res, next) => {
-//   const { statusCode = 500 } = err;
-//   if (!err.message) err.message = "Something went wrong!";
-//   console.error("Error middleware:", err);
-//   res.status(statusCode).render("error.ejs", { err });
-// });
-
 // --- DEBUG: Detailed error output (temporary) ---
 function escapeHtml(str) {
-  if (!str) return '';
+  if (!str) return "";
   return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }
 
 app.use((err, req, res, next) => {
   const statusCode = err.status || err.statusCode || 500;
-  console.error('*** FULL ERROR START ***');
-  console.error('Message:', err.message);
+  console.error("*** FULL ERROR START ***");
+  console.error("Message:", err.message);
   console.error(err.stack || err);
-  console.error('*** FULL ERROR END ***');
+  console.error("*** FULL ERROR END ***");
 
   // If in production, still render the friendly error page
-  if (process.env.NODE_ENV === 'production') {
-    return res.status(statusCode).render('error.ejs', { err });
+  if (process.env.NODE_ENV === "production") {
+    return res.status(statusCode).render("error.ejs", { err });
   }
 
   // In development, show stack in browser to speed debugging
@@ -212,10 +213,11 @@ app.use((err, req, res, next) => {
     <h1>Internal Server Error</h1>
     <p><strong>Status:</strong> ${statusCode}</p>
     <p><strong>Message:</strong> ${escapeHtml(err.message)}</p>
-    <pre style="white-space:pre-wrap;border:1px solid #ddd;padding:10px;background:#f7f7f7">${escapeHtml(err.stack || err)}</pre>
+    <pre style="white-space:pre-wrap;border:1px solid #ddd;padding:10px;background:#f7f7f7">${escapeHtml(
+      err.stack || err
+    )}</pre>
   `);
 });
-
 
 // ---------- Graceful shutdown ----------
 const PORT = process.env.PORT || 8080;
