@@ -179,12 +179,43 @@ app.use((req, res, next) => {
   next(new ExpressError(404, "Page not found!"));
 });
 
+// app.use((err, req, res, next) => {
+//   const { statusCode = 500 } = err;
+//   if (!err.message) err.message = "Something went wrong!";
+//   console.error("Error middleware:", err);
+//   res.status(statusCode).render("error.ejs", { err });
+// });
+
+// --- DEBUG: Detailed error output (temporary) ---
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 app.use((err, req, res, next) => {
-  const { statusCode = 500 } = err;
-  if (!err.message) err.message = "Something went wrong!";
-  console.error("Error middleware:", err);
-  res.status(statusCode).render("error.ejs", { err });
+  const statusCode = err.status || err.statusCode || 500;
+  console.error('*** FULL ERROR START ***');
+  console.error('Message:', err.message);
+  console.error(err.stack || err);
+  console.error('*** FULL ERROR END ***');
+
+  // If in production, still render the friendly error page
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(statusCode).render('error.ejs', { err });
+  }
+
+  // In development, show stack in browser to speed debugging
+  res.status(statusCode).send(`
+    <h1>Internal Server Error</h1>
+    <p><strong>Status:</strong> ${statusCode}</p>
+    <p><strong>Message:</strong> ${escapeHtml(err.message)}</p>
+    <pre style="white-space:pre-wrap;border:1px solid #ddd;padding:10px;background:#f7f7f7">${escapeHtml(err.stack || err)}</pre>
+  `);
 });
+
 
 // ---------- Graceful shutdown ----------
 const PORT = process.env.PORT || 8080;
