@@ -1,0 +1,42 @@
+<!-- views/partials/topCategories.ejs -->
+<div class="top-categories-root">
+  <div class="category-bar" role="tablist" aria-label="Top categories">
+    <button class="category-btn" data-cat="swim" aria-pressed="false" role="tab" title="Swim">
+      <div class="icon-wrap" aria-hidden>
+        <!-- simple swim icon -->
+        <svg width="28" height="28" viewBox="0 0 24 24"><path d="M2 12c3 0 3-3 6-3s3 3 6 3 3-3 6-3v6c-3 0-3 3-6 3s-3-3-6-3S2 15 2 12z" fill="currentColor"/></svg>
+      </div>
+      <div class="label">Swim</div>
+    </button>
+
+    <button class="category-btn" data-cat="eat" aria-pressed="false" role="tab" title="Eat">
+      <div class="icon-wrap" aria-hidden>
+        <svg width="28" height="28" viewBox="0 0 24 24"><path d="M3 2h2v10H3zM8 2h2v10H8zM14 2h2v10h-2zM19 2h2v10h-2z" fill="currentColor"/></svg>
+      </div>
+      <div class="label">Eat</div>
+    </button>
+
+    <button class="category-btn" data-cat="stay" aria-pressed="false" role="tab" title="Stay">
+      <div class="icon-wrap" aria-hidden>
+        <svg width="28" height="28" viewBox="0 0 24 24"><path d="M12 3l9 6v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1V9l9-6z" fill="currentColor"/></svg>
+      </div>
+      <div class="label">Stay</div>
+    </button>
+
+    <button class="category-btn" data-cat="hike" aria-pressed="false" role="tab" title="Hike">
+      <div class="icon-wrap" aria-hidden>
+        <svg width="28" height="28" viewBox="0 0 24 24"><path d="M1 21h22L12 2 1 21z" fill="currentColor"/></svg>
+      </div>
+      <div class="label">Hike</div>
+    </button>
+    <!-- add more category buttons here as needed -->
+  </div>
+
+  <div id="top-cat-results" class="results-area" aria-live="polite">
+    <!-- JS will inject results here -->
+  </div>
+</div>
+
+<!-- include script & css (ensure these files are present under public/) -->
+<link rel="stylesheet" href="/css/topCategories.css">
+<script defer src="/js/topCategories.js"></script>
