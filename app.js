@@ -1,149 +1,93 @@
-// app.js
-if (process.env.NODE_ENV !== "production") {
+if (process.env.NODE_ENV != "production"){
   require("dotenv").config();
 }
+
+// console.log(process.env.SECRET);
+
 
 const express = require("express");
 const app = express();
 const mongoose = require("mongoose");
+const Listing = require("./models/listing.js");
 const path = require("path");
 const methodOverride = require("method-override");
 const ejsMate = require("ejs-mate");
-const helmet = require("helmet");
-const cors = require("cors");
-const rateLimit = require("express-rate-limit");
-const morgan = require("morgan");
-
-const Listing = require("./models/listing.js");
-const Review = require("./models/review.js");
-const User = require("./models/user.js");
 
 const ExpressError = require("./utils/ExpressError.js");
-const { listingSchema, reviewSchema } = require("./schema.js");
-
+const {listingSchema , reviewSchema } = require("./schema.js");
+const Review = require("./models/review.js");
 const session = require("express-session");
 const MongoStore = require("connect-mongo");
 const flash = require("connect-flash");
-
 const passport = require("passport");
 const LocalStrategy = require("passport-local");
+const User = require("./models/user.js");
+
+
+
+
 
 const listingRouter = require("./routes/listing.js");
 const reviewRouter = require("./routes/review.js");
 const userRouter = require("./routes/user.js");
 
-// New places API route (for category tapping)
-let placesRouter;
-try {
-  placesRouter = require("./routes/places");
-} catch (e) {
-  // if the file doesn't exist yet, we'll mount a simple placeholder to avoid crashes
-  placesRouter = express.Router();
-  placesRouter.get("/", (req, res) => res.json([]));
+
+
+const dbUrl = process.env.ATLASDB_URL;
+
+main().then(() =>{
+  console.log("connect to db");
+} )
+.catch((err) =>{
+  console.log(err);
+});
+async function main(){
+  await mongoose.connect(dbUrl);
 }
-
-// ---------- Config & DB ----------
-const dbUrl = process.env.ATLASDB_URL || "mongodb://localhost:27017/wanderlust";
-
-// Connect to MongoDB with basic error handling
-mongoose.set("strictQuery", true);
-async function main() {
-  await mongoose.connect(dbUrl, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  });
-}
-main()
-  .then(() => {
-    console.log("Connected to MongoDB");
-  })
-  .catch((err) => {
-    console.error("MongoDB connection error:", err);
-  });
-
-// ---------- View engine ----------
-app.engine("ejs", ejsMate);
+app.engine("ejs",ejsMate);
 app.set("view engine", "ejs");
-app.set("views", path.join(__dirname, "views"));
-
-// Ensure templates always see a defined currentUser (prevents ReferenceError in EJS)
-app.locals.currentUser = null;
-
-// ---------- Security & Logging Middlewares ----------
-app.use(helmet());
-// inside app.js - replace the origin function in app.use(cors({...}))
-const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || "http://localhost:3000";
-const CORS_WHITELIST = (process.env.CORS_WHITELIST || CLIENT_ORIGIN)
-  .split(",")
-  .map(s => s.trim())
-  .filter(Boolean);
-
-app.use(cors({
-  origin: function (origin, callback) {
-    // allow requests with no origin (curl, Postman, native apps)
-    if (!origin) return callback(null, true);
-
-    // allow literal "null" (file://, sandboxed frames) — treat as allowed in this app
-    if (origin === 'null') {
-      console.warn('Allowing CORS origin "null" (file:// or sandboxed iframe)');
-      return callback(null, true);
-    }
-
-    // allow if origin in whitelist
-    if (CORS_WHITELIST.includes(origin)) return callback(null, true);
-
-    // blocked
-    console.warn('Blocked CORS request from origin:', origin);
-    return callback(new Error('CORS policy: This origin is not allowed'));
-  },
-  credentials: true,
-}));
-
-
-// Logging in development
-if (process.env.NODE_ENV !== "production") {
-  app.use(morgan("dev"));
-}
-
-// Body parsing limits: protect from huge payloads
-app.use(express.json({ limit: "10mb" })); // for API requests
-app.use(express.urlencoded({ extended: true, limit: "10mb" })); // for form posts
+app.set("views", path.join(__dirname,"views"));
+app.use(express.urlencoded({extended: true}));
 app.use(methodOverride("_method"));
 
-// ---------- Static files ----------
-app.use(express.static(path.join(__dirname, "public")));
+app.use(express.static(path.join(__dirname,"/public")));
 
-// ---------- Session store ----------
+
 const store = MongoStore.create({
   mongoUrl: dbUrl,
-  touchAfter: 24 * 60 * 60,
-  crypto: {
+  touchAfter: 24*60*60,
+  crypto:{
     secret: process.env.SECRET,
   },
 });
 
-store.on("error", function (e) {
-  console.log("SESSION STORE ERROR", e);
+store.on("error", function(e){
+  console.log("session store error", e);
 });
-
-const sessionOptions = {
+const sessionOptions ={
   store,
-  name: "session", // custom cookie name if you want
-  secret: process.env.SECRET || "thisshouldbeabettersecret",
+  secret:  process.env.SECRET,
   resave: false,
-  saveUninitialized: false,
-  cookie: {
-    expires: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days
-    maxAge: 7 * 24 * 60 * 60 * 1000,
-    httpOnly: true,
-    // secure: true // uncomment when serving over HTTPS
-  },
+  saveUninitialized: true,
+cookie:{
+  expires: Date.now() + 7*24*60*60*1000,
+  maxAge: 7*24*60*60*1000,
+  httponly: true,
+
+},
+
 };
 
-app.use(session(sessionOptions));
+// app.get("/", (req,res) =>{
+//   res.send("Hi, i am Arpit");
+// });
+
+
+app.use(session(sessionOptions) );
 app.use(flash());
 
-// ---------- Passport ----------
+
+
 app.use(passport.initialize());
 app.use(passport.session());
 passport.use(new LocalStrategy(User.authenticate()));
@@ -151,103 +95,47 @@ passport.use(new LocalStrategy(User.authenticate()));
 passport.serializeUser(User.serializeUser());
 passport.deserializeUser(User.deserializeUser());
 
-// ---------- Flash & locals ----------
-// Ensure res.locals.currentUser is defined for every request
-app.use((req, res, next) => {
-  res.locals.success = req.flash ? req.flash("success") : [];
-  res.locals.error = req.flash ? req.flash("error") : [];
-  res.locals.currentUser = req.user || null;
+app.use((req,res,next) =>{
+  res.locals.success = req.flash("success");
+  res.locals.error = req.flash("error");
+  res.locals.currentUser = req.user;
+  
   next();
 });
 
-// ---------- Rate limiting for API routes (tune as required) ----------
-const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 120, // limit per IP
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-app.use("/api/", apiLimiter);
 
-// ---------- Routes ----------
-// Keep your existing app routes
+// app.get("/demouser", async (req,res) =>{
+//   let fakeUser = new User({ 
+//      email:"student@gmail.com",
+//     username:"arpit"
+//   });
+//   let newUser = await User.register(fakeUser, "helloworld");
+//   res.send(newUser);
+// });
+
+
+
 app.use("/listings", listingRouter);
 app.use("/listings/:id/reviews", reviewRouter);
 app.use("/", userRouter);
 
-// Mount places API for category filtering used by topCategories client JS
-app.use("/api/places", placesRouter);
+//error handling    
 
-// A basic health check
-app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", uptime: process.uptime() });
-});
 
-// ---------- 404 & error handling ----------
-app.use((req, res, next) => {
+
+
+
+app.all(/.*/,(req,res,next) =>{
   next(new ExpressError(404, "Page not found!"));
 });
 
-// --- DEBUG: Detailed error output (temporary) ---
-function escapeHtml(str) {
-  if (!str) return "";
-  return String(str)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-}
-
-app.use((err, req, res, next) => {
-  const statusCode = err.status || err.statusCode || 500;
-  console.error("*** FULL ERROR START ***");
-  console.error("Message:", err.message);
-  console.error(err.stack || err);
-  console.error("*** FULL ERROR END ***");
-
-  // If in production, still render the friendly error page
-  if (process.env.NODE_ENV === "production") {
-    return res.status(statusCode).render("error.ejs", { err });
-  }
-
-  // In development, show stack in browser to speed debugging
-  res.status(statusCode).send(`
-    <h1>Internal Server Error</h1>
-    <p><strong>Status:</strong> ${statusCode}</p>
-    <p><strong>Message:</strong> ${escapeHtml(err.message)}</p>
-    <pre style="white-space:pre-wrap;border:1px solid #ddd;padding:10px;background:#f7f7f7">${escapeHtml(
-      err.stack || err
-    )}</pre>
-  `);
+app.use((err, req, res, next) =>{
+  let {statusCode = 500, message ="Something went Wrong !"} = err;
+  // res.send("Something went wrong !")
+  // res.status(statusCode).send(message);
+  res.status(statusCode).render("error.ejs",{err});
 });
 
-// ---------- Graceful shutdown ----------
-const PORT = process.env.PORT || 8080;
-const server = app.listen(PORT, () => {
-  console.log(`Server started on port ${PORT}`);
+app.listen(8080, () =>{
+  console.log("server is responding");
 });
-
-function gracefulShutdown(signal) {
-  console.log(`Received ${signal}. Shutting down gracefully...`);
-  server.close(async () => {
-    try {
-      await mongoose.disconnect();
-      console.log("Mongo disconnected. Exiting.");
-      process.exit(0);
-    } catch (err) {
-      console.error("Error during shutdown:", err);
-      process.exit(1);
-    }
-  });
-
-  // Force exit after 10s
-  setTimeout(() => {
-    console.error("Forcing shutdown...");
-    process.exit(1);
-  }, 10 * 1000);
-}
-
-process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
-process.on("SIGINT", () => gracefulShutdown("SIGINT"));
-
-// Export app for testing if needed
-module.exports = app;
