@@ -71,33 +71,34 @@ app.locals.currentUser = null;
 
 // ---------- Security & Logging Middlewares ----------
 app.use(helmet());
-
-// CORS setup (safe whitelist + allow no-origin requests)
+// inside app.js - replace the origin function in app.use(cors({...}))
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || "http://localhost:3000";
-// Example env: CORS_WHITELIST=https://stayhub-on26.onrender.com,http://localhost:3000
 const CORS_WHITELIST = (process.env.CORS_WHITELIST || CLIENT_ORIGIN)
   .split(",")
-  .map((s) => s.trim())
+  .map(s => s.trim())
   .filter(Boolean);
 
-app.use(
-  cors({
-    origin: function (origin, callback) {
-      // allow requests with no origin (curl, Postman, server-to-server, native apps)
-      if (!origin) return callback(null, true);
+app.use(cors({
+  origin: function (origin, callback) {
+    // allow requests with no origin (curl, Postman, native apps)
+    if (!origin) return callback(null, true);
 
-      // allow if origin is in whitelist
-      if (CORS_WHITELIST.includes(origin)) {
-        return callback(null, true);
-      }
+    // allow literal "null" (file://, sandboxed frames) — treat as allowed in this app
+    if (origin === 'null') {
+      console.warn('Allowing CORS origin "null" (file:// or sandboxed iframe)');
+      return callback(null, true);
+    }
 
-      // log rejected origin so you can add it to whitelist if it's legitimate
-      console.warn("Blocked CORS request from origin:", origin);
-      return callback(new Error("CORS policy: This origin is not allowed"));
-    },
-    credentials: true,
-  })
-);
+    // allow if origin in whitelist
+    if (CORS_WHITELIST.includes(origin)) return callback(null, true);
+
+    // blocked
+    console.warn('Blocked CORS request from origin:', origin);
+    return callback(new Error('CORS policy: This origin is not allowed'));
+  },
+  credentials: true,
+}));
+
 
 // Logging in development
 if (process.env.NODE_ENV !== "production") {
